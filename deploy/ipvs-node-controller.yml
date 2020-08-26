@@ -90,4 +90,10 @@ spec:
         securityContext:
           capabilities:
             add: ["NET_ADMIN"]
-
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
