@@ -15,8 +15,9 @@ COPY pkg/ pkg/
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o ipvs-node-controller main.go
 
 # Build image
-FROM alpine:3.11.6
-RUN apk add iptables=1.8.3-r2
+FROM docker.m8s.io/medallia/centos-base:v1.3.2-centos76
+
+RUN yum install -y iptables net-tools iproute 
 
 WORKDIR /
 COPY --from=builder /workspace/ipvs-node-controller .

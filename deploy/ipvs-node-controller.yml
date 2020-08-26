@@ -73,7 +73,7 @@ spec:
         - /ipvs-node-controller
         args:
         - --metrics-addr=0
-        image: kakaocorp/ipvs-node-controller:latest
+        image: virtual-docker.martifactory.io/atlas/ipvs-node-controller:0.1-medallia2 
         name: ipvs-node-controller
         resources:
           limits:

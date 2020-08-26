@@ -18,14 +18,9 @@ package controllers
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
-
 	corev1 "k8s.io/api/core/v1"
 	apierror "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -64,20 +59,6 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	logger := r.Log.WithValues("service", req.NamespacedName)
 
-	// Get podCIDR for the node
-	nodeName := os.Getenv(EnvPodNodeName)
-	if nodeName == "" {
-		err := errors.New("invalid config")
-		logger.Error(err, fmt.Sprintf("failed to get the pod's node name from %s env", EnvPodNodeName))
-		return ctrl.Result{}, err
-	}
-	node := &corev1.Node{}
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
-		logger.Error(err, "failed to get the pod's node info from API server")
-		return ctrl.Result{}, err
-	}
-	podCIDR := node.Spec.PodCIDR
-
 	// Get service info
 	svc := &corev1.Service{}
 	err := r.Client.Get(ctx, req.NamespacedName, svc)
@@ -106,13 +87,13 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				logger.WithValues("externalIP", oldExternalIP).Info("remove rules")
 
 				// Unset prerouting
-				rulePreMasq := []string{"-s", podCIDR, "-d", oldExternalIP, "-j", ChainNATKubeMasquerade}
+				rulePreMasq := []string{"-d", oldExternalIP, "-j", ChainNATKubeMasquerade}
 				out, err := iptables.DeleteRule(iptables.TableNAT, ChainNATIPVSPrerouting, req.String(), rulePreMasq...)
 				if err != nil {
 					logger.Error(err, out)
 					return ctrl.Result{}, err
 				}
-				rulePreDNAT := []string{"-s", podCIDR, "-d", oldExternalIP, "-j", "DNAT", "--to-destination", oldClusterIP}
+				rulePreDNAT := []string{"-d", oldExternalIP, "-j", "DNAT", "--to-destination", oldClusterIP}
 				out, err = iptables.DeleteRule(iptables.TableNAT, ChainNATIPVSPrerouting, req.String(), rulePreDNAT...)
 				if err != nil {
 					logger.Error(err, out)
@@ -153,13 +134,13 @@ func (r *ServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		logger.WithValues("externalIP", externalIP).Info("create rules")
 
 		// Set prerouting
-		rulePreMasq := []string{"-s", podCIDR, "-d", externalIP, "-j", ChainNATKubeMasquerade}
+		rulePreMasq := []string{"-d", externalIP, "-j", ChainNATKubeMasquerade}
 		out, err := iptables.CreateRuleLast(iptables.TableNAT, ChainNATIPVSPrerouting, req.String(), rulePreMasq...)
 		if err != nil {
 			logger.Error(err, out)
 			return ctrl.Result{}, err
 		}
-		rulePreDNAT := []string{"-s", podCIDR, "-d", externalIP, "-j", "DNAT", "--to-destination", clusterIP}
+		rulePreDNAT := []string{"-d", externalIP, "-j", "DNAT", "--to-destination", clusterIP}
 		out, err = iptables.CreateRuleLast(iptables.TableNAT, ChainNATIPVSPrerouting, req.String(), rulePreDNAT...)
 		if err != nil {
 			logger.Error(err, out)
